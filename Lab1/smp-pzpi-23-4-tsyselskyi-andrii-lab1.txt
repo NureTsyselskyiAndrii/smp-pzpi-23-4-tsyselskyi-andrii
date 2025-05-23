@@ -1,0 +1,488 @@
+﻿Харківський національний університет радіоелектроніки
+Факультет комп’ютерних наук
+Катедра програмної інженерії
+ 
+ 
+Звіт
+з лабораторної роботи № 1 
+з дисципліни «Скриптові мови програмування»
+
+ 
+ 
+ 
+Виконав:                                                                           Перевірив:
+ст. гр. ПЗПІ-23-4                                                              ст. викладач кафедри ПІ
+Цисельський Андрій                                            	         Сокорчук Ігор Петрович
+ 
+ 
+ 
+Харків 2025
+1 ІСТОРІЯ ЗМІН
+
+№ДатаВерсія звітуОпис змін та виправлень110.04.20250.1Зроблено звіт
+2 ЗАВДАННЯ
+     Метою завдання є створення Bash-скрипта, який обробляє розклад занять з CSV-файлу, експортованого з сайту cist.nure.ua, та перетворює його у формат CSV, сумісний із Google Календарем. Скрипт повинен підтримувати роботу через командний рядок з опціями, автоматично визначати доступні файли та групи, фільтрувати і перетворювати дані (дату, час, назви занять, описи), а також зберігати результат у новий файл. Він має бути зручним у використанні, дотримуватись стандартів Google Календаря та мати обробку помилок.
+3 ОПИС ВИКОНАНОЇ РОБОТИ
+     Весь код для для створення Bash-скрипта, який обробляє розклад занять з CSV-файлу, експортованого з сайту cist.nure.ua, та перетворює його у формат CSV, сумісний із Google Календарем знаходиться у додатку В. Посилання на відеозапис функціонування програмного застосунку наведено у додатку А. Початковий рядок скрипта — це shebang, який повідомляє системі, яку програму слід використати для запуску цього скрипта.
+     На початку задаються основні змінні скрипта: VERSION — номер версії, SCRIPT_NAME — назва самого скрипта. Також описано дві функції: show_help для виводу довідки, та show_version для відображення версії скрипта.
+1 #!/bin/bash
+2 
+3 VERSION="1.0"
+4 SCRIPT_NAME="$(basename "$0")"
+5 
+6 function show_help {
+7 	echo "Використання:"
+8 	echo "  $SCRIPT_NAME [--help | --version] | [[-q|--quiet] [академ_група] файл_із_cist.csv]"
+9 	echo
+10 	echo "Параметри:"
+11 	echo "  --help        Показати цю довідкову інформацію та завершити виконання"
+12 	echo "  --version     Показати поточну версію скрипта та завершити виконання"
+13 	echo "  -q, --quiet   Приховати вивід на екран"
+14 }
+15 
+16 function show_version {
+17     echo "$SCRIPT_NAME версія $VERSION"
+18 }
+
+     Функція select_group_interactively використовується тоді, коли групу не було вказано в аргументах командного рядка. Вона виводить список доступних груп і дає користувачу можливість вибрати одну. Якщо груп немає — повідомляється про це. Якщо користувач обирає "ВИХІД", скрипт завершує виконання. Обрана група записується у змінну chosen_group.
+19 select_group_interactively(){
+20     if [[ ${#groups[@]} -eq 0 ]]; then
+21         echo "Групи не знайдено."
+22         return 1
+23     fi
+24 
+25     groups+=("ВИХІД")
+26 
+27     echo "Будь ласка, оберіть групу:"
+28     while true; do
+29         select choice in "${groups[@]}"; do
+30             if [[ -z "$choice" ]]; then
+31                 echo "Невірний вибір, спробуйте ще раз."
+32                 break
+33             elif [[ "$choice" == "ВИХІД" ]]; then
+34                 echo "Завершення роботи."
+35                 exit 0
+36             else
+37                 chosen_group="$choice"
+38                 return 0
+39             fi
+40         done
+41     done
+42 }
+
+     Функція format_time переводить час у формат, який приймає Google Calendar (наприклад, 14:00 → 2:00 PM).
+43 format_time() {
+44     split(time, formatted_time, ":")
+45     hour = int(formatted_time[1])
+46     min = formatted_time[2]
+47     suffix = "AM"
+48     if (hour == 0) {
+49         hour = 12
+50     } else if (hour >= 12) {
+51         if (hour > 12) hour -= 12
+52         suffix = "PM"
+53     }
+54     return hour ":" min " " suffix
+55 }
+
+     Функція strip_prefix видаляє частину на початку назви предмета.
+56 strip_prefix() {
+57     sub(/^[^ ]+ *- */, "", title)
+58     return title
+59 }
+
+     Функція strip_quotes прибирає зайві лапки на початку і в кінці рядків.
+60 strip_quotes() {
+61     gsub(/^"+|"+$/, "", str)
+62     return str
+63 }
+     Функція prepare_calendar_csv читає CSV-файл розкладу, фільтрує записи за вибраною групою, перетворює дату й час у формат, сумісний із Google Calendar, додає нумерацію до предметів, розділяє лабораторні та лекційні заняття. Результат зберігається у CSV-файл для імпорту в календар.
+64 prepare_calendar_csv(){
+65 awk -v chosen_group="$chosen_group" -F '\",\"' '
+66 
+67 BEGIN {
+68     print "Subject,Start Date,Start Time,End Date,End Time,All Day Event,Description,Location,Private"
+69 }
+70 
+71 NR > 1 {
+72     split($1, arr, "[\" ]")
+73 
+74     if (arr[2] == chosen_group || arr[3] != "-") {
+75         full_title = strip_prefix(strip_quotes($1))
+76 		split(full_title, parts, / *; */)
+77 
+78         split($2, start_date, ".")
+79         split($4, end_date, ".")
+80 
+81         start_time = format_time($3)
+82         end_time = format_time($5)
+83 
+84         description = strip_quotes($12)
+85 
+86         delete group_map
+87         for (i in parts) {
+88             item = parts[i]
+89             gsub(/^ +| +$/, "", item)
+90             if (item == "") continue
+91             match(item, /[A-Za-zА-Яа-яЁёІіЇїЄєҐґЃѓ]+/, m)
+92             key = m[0]
+93             if (key in group_map) {
+94                 group_map[key] = group_map[key] ";" item
+95             } else {
+96                 group_map[key] = item
+97             }
+98         }
+99 
+100         for (k in group_map) {
+101             subject = group_map[k]
+102 
+103             if (subject ~ /Лб/) {
+104                 labsAdded[subject]++
+105                 lesson_num = int((labsAdded[subject] + 1) / 2)
+106             } else {
+107                 count[subject]++
+108                 lesson_num = count[subject]
+109             }
+110 
+111             subject_with_number = subject " №" lesson_num
+112 
+113             print "\"" subject_with_number "\"," \
+114                   "\"" start_date[2] "/" start_date[1] "/" start_date[3] "\"," \
+115                   "\"" start_time "\"," \
+116                   "\"" end_date[2] "/" end_date[1] "/" end_date[3] "\"," \
+117                   "\"" end_time "\"," \
+118                   "FALSE," \
+119                   "\"" description "\"," \
+120                   "\"\"," \
+121                   "\"True\""
+122         }
+123     }
+124 }
+125 ' "$result" > temp.csv && mv temp.csv "$result"}
+
+     Далі йде обробка аргументів командного рядка. Цей блок коду обробляє параметри, передані скрипту при запуску: --help, --version, -q/--quiet, назву CSV-файлу та назву академічної групи. Залежно від аргументів, встановлюються відповідні змінні.
+126 chosen_group=""
+127 timetable=""
+128 quiet="false"
+129 
+130 for param in "$@"; do
+131 	if [[ "$param" == "--help" ]]; then
+132 		show_help
+133 		exit 0
+134 	elif [[ "$param" == "--version" ]]; then
+135 		show_version
+136 		exit 0
+137 	elif [[ "$param" == "-q" || "$param" == "--quiet" ]]; then
+138 		quiet=true
+139 	elif [[ "$param" == *.csv ]]; then
+140 		timetable="$param"
+141 	elif [[ "$param" =~ ^ПЗПІ-[0-9]{1,2}-[0-9]+$ ]]; then
+142 		chosen_group="$param"
+143 	fi
+144 done
+
+     Далі якщо CSV-файл не був заданий як аргумент, скрипт пропонує вибрати його з наявних. Якщо файл вказано, перевіряється його існування. Інакше — скрипт завершує роботу з повідомленням про помилку.
+145 if [[ -z "$timetable" ]]; then
+146 	echo "Оберіть файл формату CSV:"
+147 	files=($(ls TimeTable_??_??_20??.csv | sort -t'_' -k4,4n -k3,3n -k2,2))
+148 	select selected in "${files[@]}" "ВИХІД"; do
+149 		if [[ "$selected" == "ВИХІД" ]]; then
+150 			exit 1
+151 		elif [[ -n "$selected" && "$selected" != "ВИХІД" ]]; then
+152 			timetable=$selected
+153 			break
+154 		else
+155 			echo "Неправильний вибір, повторіть спробу."
+156 		fi
+157 	done
+158 else
+159 	if [[ ! -f "$timetable" ]]; then
+160 		echo "Файл \"$timetable\" не знайдено."
+161 		exit 1
+162 	fi
+163 fi
+
+     Далі CSV-файл перекодовується з Windows-1251 в UTF-8, очищується від зайвих \r, після чого з нього витягуються унікальні назви груп для подальшого вибору користувачем.
+
+164 result="Google_$timetable"
+165 iconv -f WINDOWS-1251 -t UTF-8 "$timetable" > "$result"
+166 sed -i 's/\r/\n/g' "$result"
+167 
+168 mapfile -t groups < <(
+169     sed '1d; s/^" *\([^ ]*\).*$/\1/' "$result" |
+170     grep '-' |
+171     sort -t '-' -k3,3n |
+172     uniq
+173 )
+
+     Якщо групу не було вказано, викликається функція вибору. Якщо групу вказано, але її немає в списку, також викликається вибір вручну.
+174 if [[ -z "$chosen_group" ]]; then
+175     select_group_interactively || exit 1
+176 elif ! printf "%s\n" "${groups[@]}" | grep -qx "$chosen_group"; then
+177     echo "Групу '$chosen_group' не знайдено у файлі. Будь ласка, виберіть іншу:"
+178     select_group_interactively || exit 1
+179 fi
+
+
+     Далі додається дата у форматі YYYYMMDD на початок кожного рядка для сортування, а потім вона видаляється. Це дозволяє впорядкувати події в хронологічному порядку.
+180 awk -F '\",\"' '
+181 	{
+182 		split($2, date, ".")
+183 		formatted_date = date[3] date[2] date[1]
+184 		print formatted_date "," $0
+185 	}
+186 ' "$result" | sort -t',' -k1,1n | cut -d',' -f2- > temp.csv && mv temp.csv "$result"
+
+     Потім викликається функція генерації CSV для Google Calendar. Якщо не було вказано --quiet, фінальний файл виводиться у термінал.
+
+187 prepare_calendar_csv
+188 
+189 if [[ "$quiet" != "true" ]]; then
+190     cat "$result"
+191 fi
+4 ВИСНОВКИ
+     У ході виконання лабораторної роботи я ознайомився з базовими інструментами Bash для обробки текстових файлів, навчився використовувати команди select, ls, awk, sort, uniq, tee, cat, sed, iconv і реалізував скрипт для перетворення розкладу занять, експортованого з сайту cist.nure.ua, у формат, придатний для імпорту в Google Календар. В результаті було створено Bash-скрипт, який є повноцінним інструментом для автоматизації конвертації навчального розкладу у формат, що підтримується Google Календарем. Скрипт підтримує як інтерактивну взаємодію, так і параметри командного рядка для використання в автоматизованих сценаріях.
+ДОДАТОК А
+Відеозапис
+Відеозапис презентації результатів лабораторної роботи: https://youtu.be/TSYIfwQvlAU
+Хронологічний опис відеозапису:
+00:00 - Вступ
+00:10 - Завдання
+00:24 - Розгляд програми
+06:43 - Розгляд коду
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ДОДАТОК В
+Програмний код
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab1/smp-pzpi-23-4-tsyselskyi-andrii-lab1/smp-pzpi-23-4-tsyselskyi-andrii-lab1-code
+1. #!/bin/bash
+2. 
+3. VERSION="1.0"
+4. SCRIPT_NAME="$(basename "$0")"
+5. 
+6. function show_help {
+7. 	echo "Використання:"
+8. 	echo "  $SCRIPT_NAME [--help | --version] | [[-q|--quiet] [академ_група] файл_із_cist.csv]"
+9. 	echo
+10. 	echo "Параметри:"
+11. 	echo "  --help        Показати цю довідкову інформацію та завершити виконання"
+12. 	echo "  --version     Показати поточну версію скрипта та завершити виконання"
+13. 	echo "  -q, --quiet   Приховати вивід на екран"
+14. }
+15. 
+16. function show_version {
+17.     echo "$SCRIPT_NAME версія $VERSION"
+18. }
+19. 
+20. select_group_interactively(){
+21.     if [[ ${#groups[@]} -eq 0 ]]; then
+22.         echo "Групи не знайдено."
+23.         return 1
+24.     fi
+25. 
+26.     groups+=("ВИХІД")
+27. 
+28.     echo "Будь ласка, оберіть групу:"
+29.     while true; do
+30.         select choice in "${groups[@]}"; do
+31.             if [[ -z "$choice" ]]; then
+32.                 echo "Невірний вибір, спробуйте ще раз."
+33.                 break
+34.             elif [[ "$choice" == "ВИХІД" ]]; then
+35.                 echo "Завершення роботи."
+36.                 exit 0
+37.             else
+38.                 chosen_group="$choice"
+39.                 return 0
+40.             fi
+41.         done
+42.     done
+43. }
+44. 
+45. 
+46. prepare_calendar_csv(){
+47. awk -v chosen_group="$chosen_group" -F '\",\"' '
+48. function format_time(time){
+49.     split(time, formatted_time, ":")
+50.     hour = int(formatted_time[1])
+51.     min = formatted_time[2]
+52.     suffix = "AM"
+53.     if (hour == 0) {
+54.         hour = 12
+55.     } else if (hour >= 12) {
+56.         if (hour > 12) hour -= 12
+57.         suffix = "PM"
+58.     }
+59.     return hour ":" min " " suffix
+60. }
+61. 
+62. function strip_prefix(title) {
+63.     sub(/^[^ ]+ *- */, "", title)
+64.     return title
+65. }
+66. 
+67. function strip_quotes(str) {
+68.     gsub(/^"+|"+$/, "", str)
+69.     return str
+70. }
+71. 
+72. BEGIN {
+73.     print "Subject,Start Date,Start Time,End Date,End Time,All Day Event,Description,Location,Private"
+74. }
+75. 
+76. NR > 1 {
+77.     split($1, arr, "[\" ]")
+78. 
+79.     if (arr[2] == chosen_group || arr[3] != "-") {
+80.         full_title = strip_prefix(strip_quotes($1))
+81. 		split(full_title, parts, / *; */)
+82. 
+83.         split($2, start_date, ".")
+84.         split($4, end_date, ".")
+85. 
+86.         start_time = format_time($3)
+87.         end_time = format_time($5)
+88. 
+89.         description = strip_quotes($12)
+90. 
+91.         delete group_map
+92.         for (i in parts) {
+93.             item = parts[i]
+94.             gsub(/^ +| +$/, "", item)
+95.             if (item == "") continue
+96.             match(item, /[A-Za-zА-Яа-яЁёІіЇїЄєҐґЃѓ]+/, m)
+97.             key = m[0]
+98.             if (key in group_map) {
+99.                 group_map[key] = group_map[key] ";" item
+100.             } else {
+101.                 group_map[key] = item
+102.             }
+103.         }
+104. 
+105.         for (k in group_map) {
+106.             subject = group_map[k]
+107. 
+108.             if (subject ~ /Лб/) {
+109.                 labsAdded[subject]++
+110.                 lesson_num = int((labsAdded[subject] + 1) / 2)
+111.             } else {
+112.                 count[subject]++
+113.                 lesson_num = count[subject]
+114.             }
+115. 
+116.             subject_with_number = subject " №" lesson_num
+117. 
+118.             print "\"" subject_with_number "\"," \
+119.                   "\"" start_date[2] "/" start_date[1] "/" start_date[3] "\"," \
+120.                   "\"" start_time "\"," \
+121.                   "\"" end_date[2] "/" end_date[1] "/" end_date[3] "\"," \
+122.                   "\"" end_time "\"," \
+123.                   "FALSE," \
+124.                   "\"" description "\"," \
+125.                   "\"\"," \
+126.                   "\"True\""
+127.         }
+128.     }
+129. }
+130. ' "$result" > temp.csv && mv temp.csv "$result"
+131. }
+132. 
+133. chosen_group=""
+134. timetable=""
+135. quiet="false"
+136. 
+137. for param in "$@"; do
+138. 	if [[ "$param" == "--help" ]]; then
+139. 		show_help
+140. 	exit 0
+141. 	elif [[ "$param" == "--version" ]]; then
+142. 		show_version
+143. 	exit 0
+144. 	elif [[ "$param" == "-q" || "$param" == "--quiet" ]]; then
+145. 		quiet=true
+146. 	elif [[ "$param" == *.csv ]]; then
+147. 		timetable="$param"
+148. 	elif [[ "$param" =~ ^ПЗПІ-[0-9]{1,2}-[0-9]+$ ]]; then
+149. 		chosen_group="$param"
+150. 	fi
+151. done
+152. 
+153. 
+154. if [[ -z "$timetable" ]]; then
+155. 	echo "Оберіть файл формату CSV:"
+156. 	files=($(ls TimeTable_??_??_20??.csv | sort -t'_' -k4,4n -k3,3n -k2,2))
+157. 	select selected in "${files[@]}" "ВИХІД"; do
+158. 		if [[ "$selected" == "ВИХІД" ]]; then
+159. 			exit 1
+160. 		elif [[ -n "$selected" && "$selected" != "ВИХІД" ]]; then
+161. 			timetable=$selected
+162. 			break
+163. 		else
+164. 			echo "Неправильний вибір, повторіть спробу."
+165. 		fi
+166. 	done
+167. else
+168. 	if [[ ! -f "$timetable" ]]; then
+169. 		echo "Файл \"$timetable\" не знайдено."
+170. 		exit 1
+171. 	fi
+172. fi
+173. 
+174. result="Google_$timetable"
+175. iconv -f WINDOWS-1251 -t UTF-8 "$timetable" > "$result"
+176. sed -i 's/\r/\n/g' "$result"
+177. 
+178. mapfile -t groups < <(
+179.     sed '1d; s/^" *\([^ ]*\).*$/\1/' "$result" |
+180.     grep '-' |
+181.     sort -t '-' -k3,3n |
+182.     uniq
+183. )
+184. 
+185. if [[ -z "$chosen_group" ]]; then
+186.     select_group_interactively || exit 1
+187. elif ! printf "%s\n" "${groups[@]}" | grep -qx "$chosen_group"; then
+188.     echo "Групу '$chosen_group' не знайдено у файлі. Будь ласка, виберіть іншу:"
+189.     select_group_interactively || exit 1
+190. fi
+191. 
+192. awk -F '\",\"' '
+193. 	{
+194. 		split($2, date, ".")
+195. 		formatted_date = date[3] date[2] date[1]
+196. 		print formatted_date "," $0
+197. 	}
+198. ' "$result" | sort -t',' -k1,1n | cut -d',' -f2- > temp.csv && mv temp.csv "$result" 
+199. 
+200. prepare_calendar_csv
+201. 
+202. if [[ "$quiet" != "true" ]]; then
+203.     cat "$result"
+204. fi
+
+
+2
+
+
+
+
+
+
+
+
+
+

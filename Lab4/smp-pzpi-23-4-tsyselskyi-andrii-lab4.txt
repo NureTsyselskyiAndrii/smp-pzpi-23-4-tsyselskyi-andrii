@@ -1,0 +1,665 @@
+﻿Харківський національний університет радіоелектроніки
+Факультет комп’ютерних наук
+Катедра програмної інженерії
+ 
+ 
+Звіт
+з лабораторної роботи № 4
+з дисципліни «Скриптові мови програмування»
+на тему: «Продовольчий магазин "Весна"»
+
+ 
+ 
+ 
+Виконав:                                                                           Перевірив:
+ст. гр. ПЗПІ-23-4                                                              ст. викладач кафедри ПІ
+Цисельський Андрій                                            	         Сокорчук Ігор Петрович
+ 
+ 
+ 
+Харків 2025
+1 ІСТОРІЯ ЗМІН
+
+№ДатаВерсія звітуОпис змін та виправлень117.05.20250.1Зроблено звіт
+2 ЗАВДАННЯ
+     У цій лабораторній роботі потрібно вдосконалити функціональність веб-сайту інтернет-магазину, додавши модульну структуру сайту, систему авторизації користувачів та персоналізовану сторінку профілю. Основні завдання включають: усунення дублювання коду шляхом створення окремих файлів для шапки та підвалу сайту; реалізацію головної сторінки з використанням механізму require_once для підключення окремих розділів сайту на основі URL-параметрів. Необхідно створити сторінку логіна з формою авторизації та перевіркою облікових даних через файл credential.php, обмеживши доступ до основних сторінок для неавторизованих користувачів. Крім того, потрібно реалізувати сторінку профілю користувача з формою для заповнення особистих даних і завантаження фотографії. Валідація даних та їх збереження у файл мають бути реалізовані з урахуванням відповідних обмежень, зокрема вікових та форматних.
+3 ОПИС ВИКОНАНОЇ РОБОТИ
+     Весь код веб-сайту «Продовольчий магазин "Весна"» знаходиться у додатку В. Посилання на відеозапис функціонування програмного застосунку наведено у додатку А. Усі графічні матеріали зображені у додатку Б.
+     На початку роботи я вніс доопрацювання в index.php. У доопрацьованій версії проєкту я додав базову перевірку авторизації для захищених сторінок. Раніше доступ до будь-якої сторінки здійснювався без обмежень, незалежно від того, чи увійшов користувач у систему. Це створювало потенційну загрозу безпеці.
+     Було реалізовано наступні зміни:
+• Створено масив $pagesAllowedWithoutAuth, куди включено сторінки, які можна відкривати без входу в систему (home, about, login).
+• Додано перевірку: якщо користувач не авторизований (в сесії відсутній username) і намагається відкрити сторінку, що не входить до цього списку, — система не дозволяє доступ і підключає спеціальну сторінку page404.php, яка імітує відмову в доступі.
+• Таким чином, користувач бачить 404 помилку при спробі доступу до захищених сторінок без входу, що підвищує безпеку програми.
+     Це доповнення покращило керування доступом, створивши основу для реалізації повноцінної системи користувачів.
+1 <?php
+2     session_start();
+3     $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+4     $uri = trim($uri, '/');
+5     $page = $uri === '' ? 'home' : basename($uri);
+6     $pagesAllowedWithoutAuth = ['login', 'home', 'about'];
+7 ?>
+8 
+9 <!DOCTYPE html>
+10 <html lang="en">
+11 
+12 <head>
+13     <meta charset="UTF-8">
+14     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+15     <title>Продуктовий магазин Весна</title>
+16     <link rel="stylesheet" href="styles/style.css">
+17 </head>
+18 
+19 <body>
+20     <?php  require_once("components/header.php"); ?>
+21 
+22     <main>
+23         <?php
+24             if ($page && !file_exists("pages/$page.php")) {
+25                 require_once("pages/not_found_page.php");
+26             }
+27             else{
+28                 if (!isset($_SESSION['username']) && !in_array($page, $pagesAllowedWithoutAuth)) {
+29                     require_once("pages/page404.php");
+30                 }
+31                 else{
+32                     require_once("pages/$page.php");
+33                 }
+34             }
+35         ?>
+36     </main>
+37 
+38     <?php  require_once("components/footer.php"); ?>
+39 </body>
+40 
+41 </html>
+
+     Було також допрацьювано і header.php для того, щоб посиланняна до більшості сторінок для яких треба увійти до сисетми не було видно, а замість них було присутнє посилання на сторінку входу. 
+1 <header>
+2     <a href="/">
+3         <span class="nav-icon">🏠</span> Home
+4     </a>
+5     <a href="/products">
+6         <span class="nav-icon">📦</span> Products
+7     </a>
+8     <?php if (isset($_SESSION['username'])) : ?>
+9     <a href="/cart">
+10         <span class="nav-icon">🛒</span> Cart
+11     </a>
+12     <a href="/myprofile">
+13         <span class="nav-icon">👤</span> Profile
+14     </a>
+15     <a href="/logout">
+16         <span class="nav-icon">🔓</span> Logout
+17     </a>
+18     <?php else : ?>
+19     <a href="/login">
+20         <span class="nav-icon">🔐</span> Login
+21     </a>
+22     <?php endif; ?>
+23 </header>
+
+     Сама ж сторінка page404 має наступну розмітку. Cторінку 404 зображено у додатку Б (рис. Б3).
+1 <h1>Будь ласка, увійдіть спочатку до свого облікового запису!</h1>
+
+     У доопрацьованій версії я додав окремий файл credentials.php, який містить облікові дані для авторизації користувача. Це покращує організацію коду, оскільки тепер логін і пароль не вшиті безпосередньо в логіку обробки входу, а винесені в окремий конфігураційний файл.
+     Це дозволяє зручно оновлювати дані, централізовано перевіряти доступ, а також у майбутньому розширювати систему авторизації (наприклад, додати кількох користувачів або підключити базу даних).
+1 <?php
+2 $credentials = [
+3     'username' => 'admin',
+4     'password' => 'admin123',
+5 ];
+     Далі у доопрацьованій версії проєкту було додано повноцінну сторінку входу для користувача. Цей функціонал дозволяє користувачеві увійти в систему перед тим, як отримати доступ до захищених сторінок (наприклад, /products, /cart тощо).
+     Основні реалізовані зміни:
+     Через require './utils/credential.php' підключається файл із обліковими даними.
+     Після надсилання форми перевіряється, чи введені логін та пароль збігаються з тими, що збережені у файлі.
+     У разі успішного входу зберігається ім’я користувача в сесії через $_SESSION['username'], а також час входу.
+     У разі невірного логіна або пароля користувач бачить відповідне повідомлення про помилку.
+     Реалізовано просту HTML-форму з двома полями — ім’я користувача та пароль.
+     Цей функціонал є ключовим кроком до введення контролю доступу до системи. Саму сторінку входу зображено у додатку Б (рис. Б1).
+1 <?php 
+2 require './utils/credential.php';
+3 
+4 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username']) && isset($_POST['password'])) {
+5   $formUsername = $_POST['username'];
+6   $formPassword = $_POST['password'];
+7 
+8   if (isset($credentials['username'], $credentials['password'])) {
+9     if ($credentials['username'] == $formUsername && $credentials['password'] == $formPassword) {
+10       $_SESSION['username'] = $formUsername;
+11       $_SESSION['authorized_at'] = date("Y-m-d H:i:s");
+12       header('Location: /products');
+13       exit;
+14     } else {
+15       $_SESSION['input_error'] = 'Невірне ім’я користувача або пароль.';
+16     }
+17   } else {
+18     $_SESSION['input_error'] = 'Помилка зчитування облікових даних.';
+19   }
+20 }
+21 
+22 $inputError = $_SESSION['input_error'] ?? '';
+23 unset($_SESSION['input_error']);
+24 ?>
+25 
+26 <div class="login-box">
+27     <h2>🔐 Вхід</h2>
+28 
+29     <?php if ($inputError): ?>
+30     <div class="login-error"><?php echo htmlspecialchars($inputError); ?></div>
+31     <?php endif; ?>
+32 
+33     <form method="POST" action="">
+34         <input type="text" name="username" placeholder="Ім’я користувача" required>
+35         <input type="password" name="password" placeholder="Пароль" required>
+36         <button type="submit">Увійти</button>
+37     </form>
+38 </div>
+     Також я додав можливість виходу користувача з облікового запису. Це дозволяє завершити сеанс авторизованого користувача, очистивши з сесії збережені змінні (username та authorized_at), які використовуються для ідентифікації користувача в системі.
+     Після цього користувач автоматично перенаправляється на головну сторінку (/), що забезпечує зручність використання та правильну логіку завершення сесії.
+1 <?php
+2 session_start();
+3 unset($_SESSION['username'], $_SESSION['authorized_at']);
+4 header('Location: /');
+5 exit;
+6 ?>
+     Після цього я додав файл profile.php. У цьому файлі реалізовано повернення асоціативного масиву з особистими даними користувача, зокрема: ім’я, прізвище, дата народження, коротка біографія та шлях до фото профілю (фото профіля зберігається у папці assets).
+     Цей підхід дозволяє:
+• централізовано зберігати профільну інформацію,
+• легко використовувати її на сторінці профілю (наприклад, about.php),
+• при потребі динамічно оновлювати чи змінювати дані без жорсткого кодування у шаблоні сторінки.
+     Файл використовує конструкцію return array(...), що дозволяє просто підключити його через require або include, і отримати масив у змінну. 
+1 <?php return array (
+2   'name' => 'Andrii',
+3   'surname' => 'Tsyselskyi',
+4   'birthdate' => '2006-03-09',
+5   'bio' => 'Some description that is long enough to pass validation...',
+6   'photo' => 'assets/avatar.png',
+7 );
+     Після цього було створено файл myprofile.php. Цей фрагмент коду реалізує сторінку редагування профілю користувача на PHP. У першу чергу зчитуються поточні дані профілю з файлу profile.php, а також повідомлення про помилки або успішне збереження із сесії. Якщо форма була надіслана методом POST, скрипт обробляє введені дані: ім’я, прізвище, дату народження, біографію та фото. Кожне поле перевіряється на коректність. Особлива увага приділяється перевірці формату дати та віку користувача (допустимо від 16 до 150 років), а також мінімальній довжині біографії (50 символів). Якщо було завантажено нове фото, виконується перевірка MIME-типу та збереження файлу в папку assets/. Попереднє фото (якщо воно існує) видаляється. Успішно оброблені дані зберігаються у файл profile.php у вигляді PHP-асоціативного масиву. У HTML-частині відображається форма з поточними даними, повідомлення про успіх або помилку, а також попередній перегляд фото користувача. JavaScript забезпечує оновлення зображення на сторінці після вибору нового файлу без перезавантаження. Саму сторінку профілю зображено у додатку Б (рис. Б2).
+1 <?php
+2     $profileFile = __DIR__ . '/../utils/profile.php';
+3     $profile = file_exists($profileFile) ? include $profileFile : [];
+4 
+5     $error = $_SESSION['error'] ?? '';
+6     $success = $_SESSION['success'] ?? '';
+7     unset($_SESSION['error'], $_SESSION['success']);
+8 
+9     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+10         $name = trim($_POST['name']);
+11         $surname = trim($_POST['surname']);
+12         $birthdate = $_POST['birthdate'];
+13         $bio = trim($_POST['bio']);
+14         $photoPath = $profile['photo'] ?? '';
+15         
+16         $birthDateTime = DateTime::createFromFormat('Y-m-d', $birthdate);
+17         $birthDateTimeErrors = DateTime::getLastErrors();
+18         
+19         if (!$name || !$surname || !$birthDateTime || !$bio) {
+20             $_SESSION['error'] = 'Усі поля обов’язкові для заповнення.';
+21         } elseif (mb_strlen($name) < 2 || mb_strlen($surname) < 2) {
+22             $_SESSION['error'] = 'Ім’я та прізвище мають містити більше одного символу.';
+23         }elseif (!$birthDateTime || $birthDateTimeErrors['warning_count'] > 0 || $birthDateTimeErrors['error_count'] > 0) {
+24             $_SESSION['error'] = 'Неправильний формат дати.';
+25         } else {
+26             $age = date_diff($birthDateTime, new DateTime())->y;
+27             if ($age < 16 || $age > 150) {
+28                 $_SESSION['error'] = 'Вік користувача має бути не менше 16 років і не більше 150.';
+29             } elseif (mb_strlen($bio) < 50) {
+30                 $_SESSION['error'] = 'Опис має містити щонайменше 50 символів.';
+31             } else {
+32                 if (!empty($_FILES['photo']['name'])) {
+33                     if ($_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+34                         $finfo = mime_content_type($_FILES['photo']['tmp_name']);
+35                         $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+36                         if (in_array($finfo, $allowedTypes)) {
+37                             $ext = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
+38                             $newPhotoPath = 'assets/' . uniqid('profile_') . '.' . $ext;
+39 
+40                             if (!empty($photoPath) && file_exists($photoPath)) {
+41                                 unlink($photoPath);
+42                             }
+43 
+44                             move_uploaded_file($_FILES['photo']['tmp_name'], $newPhotoPath);
+45                             $photoPath = $newPhotoPath;
+46                         } else {
+47                             $_SESSION['error'] = 'Фото має бути формату JPG, PNG або GIF.';
+48                         }
+49                     } else {
+50                         $_SESSION['error'] = 'Помилка при завантаженні файлу.';
+51                     }
+52                 }
+53 
+54                 if (!isset($_SESSION['error'])) {
+55                     $profile = [
+56                         'name' => $name,
+57                         'surname' => $surname,
+58                         'birthdate' => $birthdate,
+59                         'bio' => $bio,
+60                         'photo' => $photoPath,
+61                     ];
+62 
+63                     file_put_contents($profileFile, "<?php return " . var_export($profile, true) . ";");
+64                     $_SESSION['success'] = 'Профіль збережено.';
+65                 }
+66             }
+67         }
+68         header('Location: ' . $_SERVER['REQUEST_URI']);
+69         exit;
+70     }
+71 ?>
+72 
+73 <div class="product-page" style="max-width: 1000px;">
+74     <h1>Профіль користувача</h1>
+75 
+76     <?php if ($error): ?>
+77     <div class="error-message"><?= htmlspecialchars($error) ?></div>
+78     <?php elseif ($success): ?>
+79     <div class="cart-success"><?= htmlspecialchars($success) ?></div>
+80     <?php endif; ?>
+81 
+82     <form method="POST" enctype="multipart/form-data" class="profile-form" style="display: flex; gap: 2rem;">
+83         <div style="flex: 1; text-align: center;">
+84             <img src="<?= isset($profile['photo']) ? htmlspecialchars($profile['photo']) : 'https://via.placeholder.com/200' ?>"
+85                 alt="Фото користувача" style="max-width: 60%; border-radius: 8px; margin-bottom: 1rem;">
+86             <label for="photo-upload" class="custom-file-upload" style="
+87                 display: inline-block;
+88                 padding: 0.5rem 1rem;
+89                 cursor: pointer;
+90                 background-color: #4CAF50;
+91                 color: white;
+92                 border-radius: 6px;
+93                 font-size: 0.9rem;
+94                 transition: background-color 0.3s ease;
+95             ">
+96                 Обрати фото
+97             </label>
+98             <input id="photo-upload" type="file" name="photo" accept="image/*" style="display: none;">
+99         </div>
+100 
+101         <div style="flex: 2;">
+102             <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+103                 <input type="text" name="name" placeholder="Ім’я"
+104                     value="<?= htmlspecialchars($profile['name'] ?? '') ?>" style="flex:1; padding: 0.5rem;">
+105                 <input type="text" name="surname" placeholder="Прізвище"
+106                     value="<?= htmlspecialchars($profile['surname'] ?? '') ?>" style="flex:1; padding: 0.5rem;">
+107                 <input type="date" name="birthdate" value="<?= htmlspecialchars($profile['birthdate'] ?? '') ?>"
+108                     style="padding: 0.5rem;">
+109             </div>
+110 
+111             <div style="margin-bottom: 1rem;">
+112                 <textarea name="bio" rows="12" placeholder="Стисла інформація про себе..."
+113                     style="width: 100%; resize: none; padding: 0.75rem;"><?= htmlspecialchars($profile['bio'] ?? '') ?></textarea>
+114             </div>
+115 
+116             <div style="text-align: right;">
+117                 <button type="submit" class="submit-button">Зберегти</button>
+118             </div>
+119         </div>
+120     </form>
+121 </div>
+122 
+123 <script>
+124 document.getElementById('photo-upload').addEventListener('change', function(event) {
+125     const file = event.target.files[0];
+126     if (file && file.type.startsWith('image/')) {
+127         const reader = new FileReader();
+128         reader.onload = function(e) {
+129             const img = document.querySelector('.product-page img');
+130             img.src = e.target.result;
+131         };
+132         reader.readAsDataURL(file);
+133     }
+134 });
+135 </script>
+1 
+4 ВИСНОВКИ
+     У результаті виконання лабораторної роботи було оптимізовано структуру сайту шляхом модульного розділення спільних елементів (шапка, підвал) та впроваджено систему авторизації. Створено механізм входу користувача з перевіркою логіна і пароля, а також реалізовано обмеження доступу до контенту сайту для неавторизованих осіб. Додано функціональну сторінку профілю з можливістю редагування особистої інформації та завантаження фотографії, з урахуванням обов’язкової перевірки введених даних. Завдяки цим доопрацюванням веб-сайт набув більшої гнучкості, безпеки та персоналізованого підходу до взаємодії з користувачем.
+ДОДАТОК А
+Відеозапис
+Відеозапис презентації результатів лабораторної роботи: https://youtu.be/PVY_BNkljxE
+Хронологічний опис відеозапису:
+00:00 - Вступ
+00:09 - Завдання
+00:30 - Розгляд програми
+04:32 - Розгляд коду
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ДОДАТОК Б
+Графічні матеріали
+
+Рисунок Б.1 — Сторінка входу
+
+
+Рисунок Б.2 — Сторінка профілю
+
+
+
+Рисунок Б.3 — Сторінка 404
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ДОДАТОК В
+Програмний код
+В.1 index.php
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab4/smp-pzpi-23-4-tsyselskyi-andrii-lab4/index.php
+1. <?php
+2.     session_start();
+3.     $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+4.     $uri = trim($uri, '/');
+5.     $page = $uri === '' ? 'home' : basename($uri);
+6.     $pagesAllowedWithoutAuth = ['login', 'home', 'about'];
+7. ?>
+8. 
+9. <!DOCTYPE html>
+10. <html lang="en">
+11. 
+12. <head>
+13.     <meta charset="UTF-8">
+14.     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+15.     <title>Продуктовий магазин Весна</title>
+16.     <link rel="stylesheet" href="styles/style.css">
+17. </head>
+18. 
+19. <body>
+20.     <?php  require_once("components/header.php"); ?>
+21. 
+22.     <main>
+23.         <?php
+24.             if ($page && !file_exists("pages/$page.php")) {
+25.                 require_once("pages/not_found_page.php");
+26.             }
+27.             else{
+28.                 if (!isset($_SESSION['username']) && !in_array($page, $pagesAllowedWithoutAuth)) {
+29.                     require_once("pages/page404.php");
+30.                 }
+31.                 else{
+32.                     require_once("pages/$page.php");
+33.                 }
+34.             }
+35.         ?>
+36.     </main>
+37. 
+38.     <?php  require_once("components/footer.php"); ?>
+39. </body>
+40. 
+41. </html>
+
+
+В.2 header.php
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab4/smp-pzpi-23-4-tsyselskyi-andrii-lab4/components/header.php
+1. <header>
+2.     <a href="/">
+3.         <span class="nav-icon">🏠</span> Home
+4.     </a>
+5.     <a href="/products">
+6.         <span class="nav-icon">📦</span> Products
+7.     </a>
+8.     <?php if (isset($_SESSION['username'])) : ?>
+9.     <a href="/cart">
+10.         <span class="nav-icon">🛒</span> Cart
+11.     </a>
+12.     <a href="/myprofile">
+13.         <span class="nav-icon">👤</span> Profile
+14.     </a>
+15.     <a href="/logout">
+16.         <span class="nav-icon">🔓</span> Logout
+17.     </a>
+18.     <?php else : ?>
+19.     <a href="/login">
+20.         <span class="nav-icon">🔐</span> Login
+21.     </a>
+22.     <?php endif; ?>
+23. </header>
+
+В.3 login.php
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab4/smp-pzpi-23-4-tsyselskyi-andrii-lab4/pages/login.php
+1. <?php 
+2. require './utils/credential.php';
+3. 
+4. if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['username']) && isset($_POST['password'])) {
+5.   $formUsername = $_POST['username'];
+6.   $formPassword = $_POST['password'];
+7. 
+8.   if (isset($credentials['username'], $credentials['password'])) {
+9.     if ($credentials['username'] == $formUsername && $credentials['password'] == $formPassword) {
+10.       $_SESSION['username'] = $formUsername;
+11.       $_SESSION['authorized_at'] = date("Y-m-d H:i:s");
+12.       header('Location: /products');
+13.       exit;
+14.     } else {
+15.       $_SESSION['input_error'] = 'Невірне ім’я користувача або пароль.';
+16.     }
+17.   } else {
+18.     $_SESSION['input_error'] = 'Помилка зчитування облікових даних.';
+19.   }
+20. }
+21. 
+22. $inputError = $_SESSION['input_error'] ?? '';
+23. unset($_SESSION['input_error']);
+24. ?>
+25. 
+26. <div class="login-box">
+27.     <h2>🔐 Вхід</h2>
+28. 
+29.     <?php if ($inputError): ?>
+30.     <div class="login-error"><?php echo htmlspecialchars($inputError); ?></div>
+31.     <?php endif; ?>
+32. 
+33.     <form method="POST" action="">
+34.         <input type="text" name="username" placeholder="Ім’я користувача" required>
+35.         <input type="password" name="password" placeholder="Пароль" required>
+36.         <button type="submit">Увійти</button>
+37.     </form>
+38. </div>
+
+В.4 logout.php
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab4/smp-pzpi-23-4-tsyselskyi-andrii-lab4/pages/logout.php
+1. <?php
+2. session_start();
+3. unset($_SESSION['username'], $_SESSION['authorized_at']);
+4. header('Location: /');
+5. exit;
+6. 
+7. ?>
+
+В.5 page404.php
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab4/smp-pzpi-23-4-tsyselskyi-andrii-lab4/pages/page404.php
+1. <h1>Будь ласка, увійдіть спочатку до свого облікового запису!</h1>
+
+
+В.6 myprofile.php
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab4/smp-pzpi-23-4-tsyselskyi-andrii-lab4/pages/myprofile.php
+1. <?php
+2.     $profileFile = __DIR__ . '/../utils/profile.php';
+3.     $profile = file_exists($profileFile) ? include $profileFile : [];
+4. 
+5.     $error = $_SESSION['error'] ?? '';
+6.     $success = $_SESSION['success'] ?? '';
+7.     unset($_SESSION['error'], $_SESSION['success']);
+8. 
+9.     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+10.         $name = trim($_POST['name']);
+11.         $surname = trim($_POST['surname']);
+12.         $birthdate = $_POST['birthdate'];
+13.         $bio = trim($_POST['bio']);
+14.         $photoPath = $profile['photo'] ?? '';
+15.         
+16.         $birthDateTime = DateTime::createFromFormat('Y-m-d', $birthdate);
+17.         $birthDateTimeErrors = DateTime::getLastErrors();
+18.         
+19.         if (!$name || !$surname || !$birthDateTime || !$bio) {
+20.             $_SESSION['error'] = 'Усі поля обов’язкові для заповнення.';
+21.         } elseif (mb_strlen($name) < 2 || mb_strlen($surname) < 2) {
+22.             $_SESSION['error'] = 'Ім’я та прізвище мають містити більше одного символу.';
+23.         }elseif (!$birthDateTime || $birthDateTimeErrors['warning_count'] > 0 || $birthDateTimeErrors['error_count'] > 0) {
+24.             $_SESSION['error'] = 'Неправильний формат дати.';
+25.         } else {
+26.             $age = date_diff($birthDateTime, new DateTime())->y;
+27.             if ($age < 16 || $age > 150) {
+28.                 $_SESSION['error'] = 'Вік користувача має бути не менше 16 років і не більше 150.';
+29.             } elseif (mb_strlen($bio) < 50) {
+30.                 $_SESSION['error'] = 'Опис має містити щонайменше 50 символів.';
+31.             } else {
+32.                 if (!empty($_FILES['photo']['name'])) {
+33.                     if ($_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+34.                         $finfo = mime_content_type($_FILES['photo']['tmp_name']);
+35.                         $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+36.                         if (in_array($finfo, $allowedTypes)) {
+37.                             $ext = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
+38.                             $newPhotoPath = 'assets/' . uniqid('profile_') . '.' . $ext;
+39. 
+40.                             if (!empty($photoPath) && file_exists($photoPath)) {
+41.                                 unlink($photoPath);
+42.                             }
+43. 
+44.                             move_uploaded_file($_FILES['photo']['tmp_name'], $newPhotoPath);
+45.                             $photoPath = $newPhotoPath;
+46.                         } else {
+47.                             $_SESSION['error'] = 'Фото має бути формату JPG, PNG або GIF.';
+48.                         }
+49.                     } else {
+50.                         $_SESSION['error'] = 'Помилка при завантаженні файлу.';
+51.                     }
+52.                 }
+53. 
+54.                 if (!isset($_SESSION['error'])) {
+55.                     $profile = [
+56.                         'name' => $name,
+57.                         'surname' => $surname,
+58.                         'birthdate' => $birthdate,
+59.                         'bio' => $bio,
+60.                         'photo' => $photoPath,
+61.                     ];
+62. 
+63.                     file_put_contents($profileFile, "<?php return " . var_export($profile, true) . ";");
+64.                     $_SESSION['success'] = 'Профіль збережено.';
+65.                 }
+66.             }
+67.         }
+68.         header('Location: ' . $_SERVER['REQUEST_URI']);
+69.         exit;
+70.     }
+71. ?>
+72. 
+73. <div class="product-page" style="max-width: 1000px;">
+74.     <h1>Профіль користувача</h1>
+75. 
+76.     <?php if ($error): ?>
+77.     <div class="error-message"><?= htmlspecialchars($error) ?></div>
+78.     <?php elseif ($success): ?>
+79.     <div class="cart-success"><?= htmlspecialchars($success) ?></div>
+80.     <?php endif; ?>
+81. 
+82.     <form method="POST" enctype="multipart/form-data" class="profile-form" style="display: flex; gap: 2rem;">
+83.         <div style="flex: 1; text-align: center;">
+84.             <img src="<?= isset($profile['photo']) ? htmlspecialchars($profile['photo']) : 'https://via.placeholder.com/200' ?>"
+85.                 alt="Фото користувача" style="max-width: 60%; border-radius: 8px; margin-bottom: 1rem;">
+86.             <label for="photo-upload" class="custom-file-upload" style="
+87.                 display: inline-block;
+88.                 padding: 0.5rem 1rem;
+89.                 cursor: pointer;
+90.                 background-color: #4CAF50;
+91.                 color: white;
+92.                 border-radius: 6px;
+93.                 font-size: 0.9rem;
+94.                 transition: background-color 0.3s ease;
+95.             ">
+96.                 Обрати фото
+97.             </label>
+98.             <input id="photo-upload" type="file" name="photo" accept="image/*" style="display: none;">
+99.         </div>
+100. 
+101.         <div style="flex: 2;">
+102.             <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+103.                 <input type="text" name="name" placeholder="Ім’я"
+104.                     value="<?= htmlspecialchars($profile['name'] ?? '') ?>" style="flex:1; padding: 0.5rem;">
+105.                 <input type="text" name="surname" placeholder="Прізвище"
+106.                     value="<?= htmlspecialchars($profile['surname'] ?? '') ?>" style="flex:1; padding: 0.5rem;">
+107.                 <input type="date" name="birthdate" value="<?= htmlspecialchars($profile['birthdate'] ?? '') ?>"
+108.                     style="padding: 0.5rem;">
+109.             </div>
+110. 
+111.             <div style="margin-bottom: 1rem;">
+112.                 <textarea name="bio" rows="12" placeholder="Стисла інформація про себе..."
+113.                     style="width: 100%; resize: none; padding: 0.75rem;"><?= htmlspecialchars($profile['bio'] ?? '') ?></textarea>
+114.             </div>
+115. 
+116.             <div style="text-align: right;">
+117.                 <button type="submit" class="submit-button">Зберегти</button>
+118.             </div>
+119.         </div>
+120.     </form>
+121. </div>
+122. 
+123. <script>
+124. document.getElementById('photo-upload').addEventListener('change', function(event) {
+125.     const file = event.target.files[0];
+126.     if (file && file.type.startsWith('image/')) {
+127.         const reader = new FileReader();
+128.         reader.onload = function(e) {
+129.             const img = document.querySelector('.product-page img');
+130.             img.src = e.target.result;
+131.         };
+132.         reader.readAsDataURL(file);
+133.     }
+134. });
+135. </script>
+
+
+В.7 credential.php
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab4/smp-pzpi-23-4-tsyselskyi-andrii-lab4/utils/credential.php
+1. <?php
+2. 
+3. $credentials = [
+4.     'username' => 'admin',
+5.     'password' => 'admin123',
+6. ];
+
+В.8 profile.php
+GitHub репозиторій: https://github.com/NureTsyselskyiAndrii/smp-pzpi-23-4-tsyselskyi-andrii/blob/main/Lab4/smp-pzpi-23-4-tsyselskyi-andrii-lab4/utils/profile.php
+1. <?php return array (
+2.   'name' => 'Andrii',
+3.   'surname' => 'Tsyselskyi',
+4.   'birthdate' => '2006-03-09',
+5.   'bio' => 'Some description that is long enough to pass validation...',
+6.   'photo' => 'assets/avatar.png',
+7. );
+
+
+2
+
+
+
+
+
+
+
+
+
+
